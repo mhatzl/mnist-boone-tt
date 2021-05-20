@@ -1,3 +1,8 @@
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class MnistMatrix {
 
     private int [][] data;
@@ -36,6 +41,16 @@ public class MnistMatrix {
 
     public int getNumberOfColumns() {
         return nCols;
+    }
+
+    public List<Integer> getDataAsList() {
+        var tmp = new ArrayList<Integer>(this.data.length * this.data[0].length);
+        for (int[] i : this.data) {
+            for (int j : i) {
+                tmp.add(j);
+            }
+        }
+        return tmp;
     }
 
 }
