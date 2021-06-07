@@ -89,14 +89,16 @@ public class Main {
             }
 
             // detect if test was successful
+            testsSuccessful[i] = true;
             List<Double> targets = testPatterns.getTargets().get(i);
             for (int j = 0; j < targets.size(); j++) {
                 if (Math.abs(targets.get(j) - classTargetValue) < TARGET_CLASS_DELTA) {
                     double actOutputClassDistance = Math.abs(net.getOutputNeuron(j).getOutput() - classTargetValue);
                     for (int x = 0; x < net.getOutputNeuronCount(); x++) {
-                        if (x != j) {
-                            double otherClassDistance = Math.abs(net.getOutputNeuron(x).getOutput() - classTargetValue);
-                            testsSuccessful[i] = !(actOutputClassDistance > otherClassDistance);
+                        double otherClassDistance = Math.abs(net.getOutputNeuron(x).getOutput() - classTargetValue);
+                        if (x != j && (actOutputClassDistance > otherClassDistance)) {
+                            testsSuccessful[i] = false;
+                            break;
                         }
                     }
                 }
@@ -132,7 +134,7 @@ public class Main {
         double nonClassTargetValue = 0.1D;
         File mnistANN = new File("mnistANN_784i_6h_10o.xnet");
         int steps = 5;
-        int epochs = 1;
+        int epochs = 2;
         int nrHiddenLayers = 6;
 
         TT_TestResults testResults = neuralNetRun(mnistANN, classTargetValue, nonClassTargetValue, steps, epochs, nrHiddenLayers);
