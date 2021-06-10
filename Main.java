@@ -11,15 +11,42 @@ import java.util.List;
 
 public class Main {
 
-    public static TT_TestResults neuralNetRun(File mnistANN, double classTargetValue, double nonClassTargetValue, int annSteps, int annEpochs, int nrHiddenLayers) {
-        return neuralNetRun(mnistANN, classTargetValue, nonClassTargetValue, annSteps, annEpochs, nrHiddenLayers, false);
+    final static double TARGET_CLASS_DELTA = 0.0000000000001D;
+
+    /**
+     * Runs over all training and test patterns of the mnist dataset by training a ANN annSteps*annEpochs times before testing
+     * @param mnistANN file to a saved Boone-ANN in xnet-format, if the file doesn't exist, a new ANN is created
+     * @param classTargetValues array of values a output neuron is trained to for classification
+     * @param nonClassTargetValues array of values a output neuron is trained to for non-classification
+     * @param annSteps number of steps a ANN gets trained
+     * @param annEpochs number of epochs a ANN gets trained
+     * @param nrHiddenNeurons number of hidden neurons used when first creating a ANN
+     * @return TT_TestResults containing information about test results of this neuralNetRun
+     */
+    public static TT_TestResults neuralNetRun(File mnistANN, double[] classTargetValues, double[] nonClassTargetValues, int annSteps, int annEpochs, int nrHiddenNeurons) {
+        return neuralNetRun(mnistANN, classTargetValues, nonClassTargetValues, annSteps, annEpochs, nrHiddenNeurons, false);
     }
 
-    public static TT_TestResults neuralNetRun(File mnistANN, double classTargetValue, double nonClassTargetValue, int annSteps, int annEpochs, int nrHiddenLayers, boolean debug) {
-        final double TARGET_CLASS_DELTA = 0.0000000000001D;
+    /**
+     * Runs over all training and test patterns of the mnist dataset by training a ANN annSteps*annEpochs times before testing
+     * @param mnistANN file to a saved Boone-ANN in xnet-format, if the file doesn't exist, a new ANN is created
+     * @param classTargetValues array of values a output neuron is trained to for classification
+     * @param nonClassTargetValues array of values a output neuron is trained to for non-classification
+     * @param annSteps number of steps a ANN gets trained
+     * @param annEpochs number of epochs a ANN gets trained
+     * @param nrHiddenNeurons number of hidden neurons used when first creating a ANN
+     * @param debug true: additional debug information is printed
+     * @return TT_TestResults containing information about test results of this neuralNetRun
+     */
+    public static TT_TestResults neuralNetRun(File mnistANN, double[] classTargetValues, double[] nonClassTargetValues, int annSteps, int annEpochs, int nrHiddenNeurons, boolean debug) {
         NeuralNet net;
         MnistMatrix[] mnistMatricesTrain;
         MnistMatrix[] mnistMatricesTest;
+
+        if ((classTargetValues.length != 10) || (nonClassTargetValues.length != 10)) {
+            System.out.println("Please provide 10 target values for class and non-class");
+            return null;
+        }
 
         try {
             // get training data
@@ -32,30 +59,25 @@ public class Main {
         }
 
         if (mnistANN.exists()) {
+            var filter = new BooneFilter();
             try {
-                net = NeuralNet.load(mnistANN, new BooneFilter());
-            } catch (IOException exception) {
-                System.out.println("Couldn't load ANN " + mnistANN);
-                return null;
+                filter.setCompressed(true);
+                net = NeuralNet.load(mnistANN, filter);
+            } catch (Exception exception) {
+                try {
+                    filter.setCompressed(false);
+                    net = NeuralNet.load(mnistANN, filter);
+                } catch (Exception ex) {
+                    System.out.println("Couldn't load ANN " + mnistANN);
+                    return null;
+                }
             }
         } else {
-            net = NetFactory.createFeedForward(new int[]{784, nrHiddenLayers, 10}, false, new boone.map.Function.Sigmoid(), new RpropTrainer(), null, null);
+            net = NetFactory.createFeedForward(new int[]{784, nrHiddenNeurons, 10}, false, new boone.map.Function.Sigmoid(), new RpropTrainer(), null, null);
         }
 
-        PatternSet trainPatterns = new PatternSet();
-        for (var mnistMatrix : mnistMatricesTrain) {
-            MnistPatternSet mnistSet = new MnistPatternSet(mnistMatrix, classTargetValue, nonClassTargetValue);
-
-            trainPatterns.getInputs().add(mnistSet.getInputs());
-            trainPatterns.getTargets().add(mnistSet.getTargets());
-        }
-        PatternSet testPatterns = new PatternSet();
-        for (var mnistMatrix : mnistMatricesTest) {
-            MnistPatternSet mnistSet = new MnistPatternSet(mnistMatrix, classTargetValue, nonClassTargetValue);
-
-            testPatterns.getInputs().add(mnistSet.getInputs());
-            testPatterns.getTargets().add(mnistSet.getTargets());
-        }
+        PatternSet trainPatterns = getMnistPatternSet(classTargetValues, nonClassTargetValues, mnistMatricesTrain);
+        PatternSet testPatterns = getMnistPatternSet(classTargetValues, nonClassTargetValues, mnistMatricesTest);
 
         Trainer trainer = net.getTrainer();
         trainer.setTrainingData(trainPatterns);
@@ -63,22 +85,21 @@ public class Main {
         trainer.setEpochs(annEpochs);
         trainer.setStepMode(true);
 
-        System.out.println("*** Training " + (annSteps * annEpochs) + " epochs...");
+        System.out.println("*** Training " + (annSteps * annEpochs) + " steps * epochs ...");
         for (int i = 0; i < annSteps; i++) {
             trainer.train();
             System.out.println((i * annEpochs));
         }
-
 
         System.out.println("\n*** Testing the network...");
         double[] testsError = new double[testPatterns.size()];
         boolean[] testsSuccessful = new boolean[testPatterns.size()];
 
         for (int i = 0; i < testPatterns.size(); i++) {
-            System.out.println("** Testing pattern " + i);
             testsError[i] = net.getTrainer().test(testPatterns.getInputs().get(i), testPatterns.getTargets().get(i));
 
             if (debug) {
+                System.out.println("** Testing pattern " + i);
                 System.out.println("Inputsize = " + testPatterns.getInputs().get(i).size());
                 System.out.println("For input \n" + formattedInputToString(testPatterns.getInputs().get(i)));
                 System.out.println("Target " + " = " + testPatterns.getTargets().get(i));
@@ -88,21 +109,7 @@ public class Main {
                 System.out.println("Error " + i + " = " + testsError[i]);
             }
 
-            // detect if test was successful
-            testsSuccessful[i] = true;
-            List<Double> targets = testPatterns.getTargets().get(i);
-            for (int j = 0; j < targets.size(); j++) {
-                if (Math.abs(targets.get(j) - classTargetValue) < TARGET_CLASS_DELTA) {
-                    double actOutputClassDistance = Math.abs(net.getOutputNeuron(j).getOutput() - classTargetValue);
-                    for (int x = 0; x < net.getOutputNeuronCount(); x++) {
-                        double otherClassDistance = Math.abs(net.getOutputNeuron(x).getOutput() - classTargetValue);
-                        if (x != j && (actOutputClassDistance > otherClassDistance)) {
-                            testsSuccessful[i] = false;
-                            break;
-                        }
-                    }
-                }
-            }
+            testsSuccessful[i] = wasTestSuccessful(testPatterns.getTargets().get(i), net.getOutput(null), classTargetValues);
         }
 
         int successCnt = 0;
@@ -128,19 +135,66 @@ public class Main {
         return testResults;
     }
 
+    /**
+     * Get mnist patternSet to be used by boone
+     * @param classTargetValues array of values a output neuron is trained to for classification
+     * @param nonClassTargetValues array of values a output neuron is trained to for non-classification
+     * @param mnistMatrices matrices with mnist data
+     * @return patternSet containing the mnist data in a form boone can use
+     */
+    private static PatternSet getMnistPatternSet(double[] classTargetValues, double[] nonClassTargetValues, MnistMatrix[] mnistMatrices) {
+        PatternSet patternSet = new PatternSet();
+        for (var mnistMatrix : mnistMatrices) {
+            MnistPatternSet mnistSet = new MnistPatternSet(mnistMatrix, classTargetValues, nonClassTargetValues);
 
-    public static void main(String[] args) {
-        double classTargetValue = 0.8D;
-        double nonClassTargetValue = 0.1D;
-        File mnistANN = new File("mnistANN_784i_6h_10o.xnet");
-        int steps = 5;
-        int epochs = 2;
-        int nrHiddenLayers = 6;
-
-        TT_TestResults testResults = neuralNetRun(mnistANN, classTargetValue, nonClassTargetValue, steps, epochs, nrHiddenLayers);
-        System.out.println(testResults);
+            patternSet.getInputs().add(mnistSet.getInputs());
+            patternSet.getTargets().add(mnistSet.getTargets());
+        }
+        return patternSet;
     }
 
+    /**
+     * Method to check if a test was successful
+     * @param targets targets for this test
+     * @param outputs outputs of the ANN for this test
+     * @param classTargetValues used classTargetValues of the ANN
+     * @return true: the test was successful
+     */
+    public static boolean wasTestSuccessful(List<Double> targets, double[] outputs, double[] classTargetValues) {
+        for (int j = 0; j < targets.size(); j++) {
+            if (Math.abs(targets.get(j) - classTargetValues[j]) < TARGET_CLASS_DELTA) {
+                double actOutputClassDistance = Math.abs(outputs[j] - classTargetValues[j]);
+                for (int x = 0; x < outputs.length; x++) {
+                    double otherClassDistance = Math.abs(outputs[x] - classTargetValues[x]);
+                    if (x != j && (actOutputClassDistance > otherClassDistance)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+
+    public static void main(String[] args) {
+        double[] classTargetValues = new double[]{1.0D, 0.9D, 1.0D, 0.9D, 1.0D, 0.9D, 1.0D, 0.9D, 1.0D, 0.9D}; // index 0 = digit 0, index 1 = digit 1, ...
+        double[] nonClassTargetValues = new double[]{0.1D, 0.0D, 0.1D, 0.0D, 0.1D, 0.0D, 0.1D, 0.0D, 0.1D, 0.0D};
+        File mnistANN = new File("mnistANN_784i_100h_10o_classical.xnet");
+        int steps = 1;
+        int epochs = 2;
+        int nrHiddenNeurons = 100;
+
+        var startTime = System.nanoTime();
+
+        TT_TestResults testResults = neuralNetRun(mnistANN, classTargetValues, nonClassTargetValues, steps, epochs, nrHiddenNeurons);
+        System.out.println(testResults);
+
+        System.out.println("Run took: " + ((System.nanoTime() - startTime) / 1000000000.0D) + "s");
+    }
+
+    /**
+     * Class containing useful test results
+     */
     private static class TT_TestResults {
         public double [] testsError;
         public boolean[] testsSuccessful;

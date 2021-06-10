@@ -6,16 +6,16 @@ public class MnistPatternSet {
     private final List<Double> inputs;
     private final List<Double> targets;
 
-    public MnistPatternSet(MnistMatrix mnistMatrix, double classTargetValue, double nonClassTargetValue) {
+    public MnistPatternSet(MnistMatrix mnistMatrix, double[] classTargetValues, double[] nonClassTargetValues) {
         this.targets = new ArrayList<>(10);
         this.inputs = new ArrayList<>(784);
 
         int label = mnistMatrix.getLabel();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < classTargetValues.length; i++) {
             if (i != label) {
-                this.targets.add(nonClassTargetValue);
+                this.targets.add(nonClassTargetValues[i]);
             } else {
-                this.targets.add(classTargetValue);
+                this.targets.add(classTargetValues[i]);
             }
         }
 
